@@ -1,0 +1,36 @@
+pipeline {
+     
+    agent {label 'slave'}
+    environment {
+        PATH = "/opt/apache-maven-3.8.1/bin:$PATH"
+    }
+	stages {
+        stage ("git")
+        {
+            steps {
+               git branch: 'master', credentialsId: '96b4a3d1-6758-4913-980f-f3603b8e3831', url: 'https://github.com/Ideas2IT/fego_user.git'
+            }
+	    }
+		stage("Build code") 
+		{
+		    steps{
+			  sh "mvn clean install"
+			}
+		}	
+	    stage('Docker Build') 
+		{
+		  steps {
+            sh 'docker build -t 712322603813.dkr.ecr.us-west-2.amazonaws.com/fegouser:latest .'
+			}
+	    }
+        stage("Docker Push  ECR") {
+            steps{
+                script{
+                     sh 'aws ecr get-login-password  --region us-west-2 | docker login --username AWS --password-stdin 712322603813.dkr.ecr.us-west-2.amazonaws.com'
+                     sh 'docker push 712322603813.dkr.ecr.us-west-2.amazonaws.com/fegouser:latest'
+                    
+                } 
+            } 
+        }
+}
+}
