@@ -1,0 +1,30 @@
+pipeline{
+
+    agent {label 'slave'}
+    
+    tools {
+        terraform 'terraform14'
+    }
+    stages{
+        stage("Git CheckOut")
+        {
+            steps {
+                git branch: 'main', credentialsId: '980f-f3603b8e3831', url: 'https://github.com/gitanbu/ecsproject.git'
+            }
+        }
+    
+        stage("Terraform init"){
+            steps{
+                sh "terraform init"
+            }
+        }
+
+        stage("Terraform apply")
+        {
+            steps{
+                sh "terraform apply --auto-approve"
+            }
+        }
+    }
+}
+    
