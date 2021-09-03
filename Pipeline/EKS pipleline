@@ -1,0 +1,91 @@
+pipeline {
+    agent any
+    stages {
+        stage('Foundation Checkout') {
+            steps {
+              	git branch: 'develop', changelog: false, credentialsId: 'get', poll: false, url: 'https://github.com/santhosh3018/fego_foundation-1.git'
+            	echo "checkout completed sucessfully"
+            }
+ 	    }
+ 	    stage('Foundation Build') {
+            steps {
+                sh """ls"""
+              	sh 'mvn clean install package'
+            }
+ 	   }
+	    stage('User Checkout') {
+            steps {
+              	git branch: 'develop', changelog: false, credentialsId: 'get', poll: false, url: 'https://github.com/santhosh3018/fego_user-1.git'
+            	echo "checkout completed sucessfully"
+            }
+        }
+        stage('User Build') {
+            steps {
+              	sh """ mvn clean install -Dmaven.test.failure.ignore=true -Dmaven.test.skip """
+            }
+ 	    }   
+        stage("Docker variables") {
+            steps {
+              script {
+                env.IMAGEURL= "942780176484.dkr.ecr.ap-southeast-1.amazonaws.com/fego-user-service:null-207"
+				env.ECRREPOURI = "942780176484.dkr.ecr.ap-southeast-1.amazonaws.com/fego-user-service"
+			 	env.DOCKERPUSHURL = "https://942780176484.dkr.ecr.ap-southeast-1.amazonaws.com/fego-user-service"
+				env.BRANCH_NAME = "null"
+				env.TAG = "${env.BRANCH_NAME}" + "-" + "${BUILD_NUMBER}"
+				echo "Tag : ${env.TAG}"
+                env.IMAGE = "${env.ECRREPOURI}" + ":" + "${env.TAG}"
+                env.FILENAME = "docker-compose.yaml"
+                }
+            }
+        }
+        stage("Docker build") {
+                steps {
+                    sh """ 
+                        pwd
+                        docker build -t ${env.ECRREPOURI}:${env.TAG} .
+                    """
+                } // steps end
+            } // docker build stage end
+      // stage('code-analysis-user'){
+        //     environment {
+          //   scannerHome = tool 'sonar-scanner'
+        //    }
+          //   steps {
+        //        withSonarQubeEnv('sonarqube') {
+          //        sh 'mvn org.sonarsource.scanner.maven:sonar-maven-plugin:3.7.0.1746:sonar'
+        //       }
+        //    }
+    //    }
+        stage("Docker push to AWS ECR") {
+            steps{
+                script{
+                     sh("eval \$(aws ecr get-login --no-include-email --region ap-southeast-1)")
+                     docker.withRegistry("${env.DOCKERPUSHURL}") {
+                     docker.image("${env.IMAGE}").push()
+                     sh "docker rmi ${env.IMAGE} | true"
+                     //sh "docker rmi ${env.IMAGE} | true"
+                    } //docker withRegistry end
+                } //script end
+            } // steps end
+        } //  docker push stage end
+       stage("Docker Deploy") {
+                 steps {
+                    sh """ 
+                   sed -i "s|${env.IMAGEURL}|${env.IMAGE}|g" ${env.FILENAME}
+                    cat ${env.FILENAME}
+                    docker-compose -f ${env.FILENAME} up -d
+                    """
+                }
+       }
+                
+                stage("Deploy into k8s Cluster"){
+                    steps{
+        withCredentials([kubeconfigFile(credentialsId: 'kube-credentials', variable: 'kube-credentials')]) {
+                	sh 'kubectl apply -f springboot.yml'
+			        sh 'kubectl apply -f postgres-config.yml'
+			        sh 'kubectl apply -f redis.yaml'
+        }
+                }
+                }
+       }
+    }
