@@ -8,7 +8,7 @@ pipeline {
         stage ("git")
         {
             steps {
-               git branch: 'master', credentialsId: '96b4a3d1-6758-4913-980f-f3603b8e3831', url: 'https://github.com/gitanbu/fego_user.git'
+               git branch: 'master', credentialsId: '96b4a3d1-6758', url: 'https://github.com/gitanbu/fego_user.git'
             }
 	    }
 		stage("Build code") 
